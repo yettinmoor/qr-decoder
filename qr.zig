@@ -56,44 +56,45 @@ fn decodeByte(qr: *const QrImage, byte_data: ByteData) u8 {
     const x = byte_data.x;
     const y = byte_data.y;
     const is_masked = (x + y) % 2 == 0;
-    return switch (byte_data.dir) {
-        .Up => (qr.data[y + 0][x + 0] << 0 |
-            qr.data[y + 0][x + 1] << 1 |
-            qr.data[y + 1][x + 0] << 2 |
-            qr.data[y + 1][x + 1] << 3 |
-            qr.data[y + 2][x + 0] << 4 |
-            qr.data[y + 2][x + 1] << 5 |
-            qr.data[y + 3][x + 0] << 6 |
-            qr.data[y + 3][x + 1] << 7) ^
-            @as(u8, if (is_masked) 0b1001_1001 else 0b0110_0110),
-        .Down => (qr.data[y + 3][x + 0] << 0 |
-            qr.data[y + 3][x + 1] << 1 |
-            qr.data[y + 2][x + 0] << 2 |
-            qr.data[y + 2][x + 1] << 3 |
-            qr.data[y + 1][x + 0] << 4 |
-            qr.data[y + 1][x + 1] << 5 |
-            qr.data[y + 0][x + 0] << 6 |
-            qr.data[y + 0][x + 1] << 7) ^
-            @as(u8, if (is_masked) 0b0110_0110 else 0b1001_1001),
-        .LeftCW => (qr.data[y + 0][x + 0] << 0 |
-            qr.data[y + 0][x + 1] << 1 |
-            qr.data[y + 1][x + 0] << 2 |
-            qr.data[y + 1][x + 1] << 3 |
-            qr.data[y + 1][x + 2] << 4 |
-            qr.data[y + 1][x + 3] << 5 |
-            qr.data[y + 0][x + 2] << 6 |
-            qr.data[y + 0][x + 3] << 7) ^
-            @as(u8, if (is_masked) 0b0110_1001 else 0b1001_0110),
-        .LeftCCW => (qr.data[y + 1][x + 0] << 0 |
-            qr.data[y + 1][x + 1] << 1 |
-            qr.data[y + 0][x + 0] << 2 |
-            qr.data[y + 0][x + 1] << 3 |
-            qr.data[y + 0][x + 2] << 4 |
-            qr.data[y + 0][x + 3] << 5 |
-            qr.data[y + 1][x + 2] << 6 |
-            qr.data[y + 1][x + 3] << 7) ^
-            @as(u8, if (is_masked) 0b1001_0110 else 0b0110_1001),
+
+    const bit_positions: [8]struct { dx: usize, dy: usize } = switch (byte_data.dir) {
+        .Up => .{
+            .{ .dx = 1, .dy = 3 }, .{ .dx = 0, .dy = 3 },
+            .{ .dx = 1, .dy = 2 }, .{ .dx = 0, .dy = 2 },
+            .{ .dx = 1, .dy = 1 }, .{ .dx = 0, .dy = 1 },
+            .{ .dx = 1, .dy = 0 }, .{ .dx = 0, .dy = 0 },
+        },
+        .Down => .{
+            .{ .dx = 1, .dy = 0 }, .{ .dx = 0, .dy = 0 },
+            .{ .dx = 1, .dy = 1 }, .{ .dx = 0, .dy = 1 },
+            .{ .dx = 1, .dy = 2 }, .{ .dx = 0, .dy = 2 },
+            .{ .dx = 1, .dy = 3 }, .{ .dx = 0, .dy = 3 },
+        },
+        .LeftCW => .{
+            .{ .dx = 3, .dy = 0 }, .{ .dx = 2, .dy = 0 },
+            .{ .dx = 3, .dy = 1 }, .{ .dx = 2, .dy = 1 },
+            .{ .dx = 1, .dy = 1 }, .{ .dx = 0, .dy = 1 },
+            .{ .dx = 1, .dy = 0 }, .{ .dx = 0, .dy = 0 },
+        },
+        .LeftCCW => .{
+            .{ .dx = 3, .dy = 1 }, .{ .dx = 2, .dy = 1 },
+            .{ .dx = 3, .dy = 0 }, .{ .dx = 2, .dy = 0 },
+            .{ .dx = 1, .dy = 0 }, .{ .dx = 0, .dy = 0 },
+            .{ .dx = 1, .dy = 1 }, .{ .dx = 0, .dy = 1 },
+        },
     };
+
+    var byte: u8 = 0;
+    for (bit_positions) |d| byte = (byte << 1) | qr.data[y + d.dy][x + d.dx];
+
+    const mask: u8 = switch (byte_data.dir) {
+        .Up => 0b1001_1001,
+        .Down => 0b0110_0110,
+        .LeftCW => 0b0110_1001,
+        .LeftCCW => 0b1001_0110,
+    };
+
+    return byte ^ if (is_masked) mask else ~mask;
 }
 
 test "decode one byte" {
