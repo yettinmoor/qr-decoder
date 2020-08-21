@@ -22,10 +22,10 @@ const ByteData = struct {
     dir: BitDirection,
 };
 
-fn generatePositions(allocator: *Allocator, qr: *const QrImage) ![]ByteData {
-    const dirs = [_]BitDirection{
-        .Up, .LeftCCW, .Down, .Down, .LeftCW, .Up, .Up,
-    };
+fn generateBytePositions(allocator: *Allocator, qr: *const QrImage) ![]ByteData {
+    // TODO complete or generate this automatically
+    const dirs = [_]BitDirection{ .Up, .LeftCCW, .Down, .Down, .LeftCW, .Up, .Up };
+
     var positions = ArrayList(ByteData).init(allocator);
 
     var x: usize = 19;
@@ -33,7 +33,7 @@ fn generatePositions(allocator: *Allocator, qr: *const QrImage) ![]ByteData {
     var last_dir: BitDirection = .Up;
     const len = decodeByte(qr, .{ .x = x, .y = y, .dir = .Up });
 
-    for (dirs[0..@intCast(usize, len)]) |dir| {
+    for (dirs[0..len]) |dir| {
         switch (dir) {
             .Up => y -= @as(usize, if (last_dir != .Up) 2 else 4),
             .Down => y += @as(usize, if (last_dir != .Down) 2 else 4),
@@ -49,13 +49,13 @@ fn generatePositions(allocator: *Allocator, qr: *const QrImage) ![]ByteData {
         try positions.append(.{ .x = x, .y = y, .dir = dir });
         last_dir = dir;
     }
+
     return positions.items;
 }
 
 fn decodeByte(qr: *const QrImage, byte_data: ByteData) u8 {
     const x = byte_data.x;
     const y = byte_data.y;
-    const is_masked = (x + y) % 2 == 0;
 
     const bit_positions: [8]struct { dx: usize, dy: usize } = switch (byte_data.dir) {
         .Up => .{
@@ -87,6 +87,7 @@ fn decodeByte(qr: *const QrImage, byte_data: ByteData) u8 {
     var byte: u8 = 0;
     for (bit_positions) |d| byte = (byte << 1) | qr.data[y + d.dy][x + d.dx];
 
+    const is_masked = (x + y) % 2 == 0;
     const mask: u8 = switch (byte_data.dir) {
         .Up => 0b1001_1001,
         .Down => 0b0110_0110,
@@ -100,6 +101,7 @@ fn decodeByte(qr: *const QrImage, byte_data: ByteData) u8 {
 test "decode one byte" {
     const byte = decodeByte(
         &qr_data1,
+        // length byte (== 5)
         .{ .x = 19, .y = 15, .dir = .Up },
     );
     expect(byte == 0b00000101);
@@ -111,12 +113,15 @@ test "decode qr image" {
 }
 
 fn testDecoder(qr: *const QrImage, expected: []const u8) !void {
-    const positions = try generatePositions(page_allocator, qr);
+    const positions = try generateBytePositions(page_allocator, qr);
     expect(positions.len == expected.len);
     var bytes = try page_allocator.alloc(u8, positions.len);
     for (positions) |p, i| bytes[i] = decodeByte(qr, p);
     expect(mem.eql(u8, bytes, expected));
 }
+
+// Test data courtesy of zLuki
+// https://www.codewars.com/kata/5ef9c85dc41b4e000f9a645f
 
 const qr_data1 = QrImage{
     // Hello
